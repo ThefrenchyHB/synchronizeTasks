@@ -1,14 +1,5 @@
 # synchronizeTasks
-   +-----------------------+           +----------------------+
-   |                       |           |                      |
-   |    Google Tasks       | <-------> |   Google Sheets     |
-   |                       |           |                      |
-   +-----------------------+           +----------------------+
-            ^                                   ^
-            |                                   |
-            |                                   |
-            +-----------------------------------+
-                     Synchronisation des tâches
+
 ### Function Description (English):
 
 The provided function `synchronizeTasks` is designed to synchronize tasks between Google Tasks and a Google Sheets document. It's particularly useful when you want to manage tasks in both platforms simultaneously. 
