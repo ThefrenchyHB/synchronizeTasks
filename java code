@@ -1,0 +1,114 @@
+function synchronizeTasks() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getDataRange();
+  var data = range.getValues();
+  var lastRow = range.getLastRow();
+
+  if (lastRow <= 1) {
+    Logger.log('No data found in sheet.');
+    return;
+  }
+
+  var taskLists = Tasks.Tasklists.list().getItems();
+  if (!taskLists || taskLists.length === 0) {
+    Logger.log('No task lists found.');
+    return;
+  }
+
+  // Map task list names to IDs
+  var taskListMap = {};
+  taskLists.forEach(function(taskList) {
+    taskListMap[taskList.getTitle()] = taskList.getId();
+  });
+
+  // Create a new column to mark updated or deleted tasks
+  var statusColumn = data[0].length + 1;
+  sheet.getRange(1, statusColumn).setValue('Status');
+
+  var updatedTasks = [];
+  var deletedTasks = [];
+
+  // Compare tasks in Google Tasks with tasks in the sheet
+  taskLists.forEach(function(taskList) {
+    var taskListId = taskList.getId(); // Define taskListId here
+    var tasks = Tasks.Tasks.list(taskListId).getItems();
+    if (tasks && tasks.length > 0) {
+      tasks.forEach(function(task) {
+        var title = task.title;
+        var found = data.some(function(row, index) {
+          if (index === 0) return false; // Skip headers
+          if (row[1] === title) {
+            // Task found in the sheet, mark as updated
+            updatedTasks.push(title);
+            sheet.getRange(index + 1, statusColumn).setValue('Updated');
+            return true;
+          }
+          return false;
+        });
+        if (!found) {
+          // Task not found in the sheet, mark as deleted
+          deletedTasks.push(title);
+        }
+      });
+    }
+  });
+
+  // Create new tasks in Google Tasks for tasks not in the sheet
+  data.forEach(function(row, index) {
+    if (index === 0) return; // Skip headers
+    var title = row[1];
+    if (updatedTasks.indexOf(title) === -1 && deletedTasks.indexOf(title) === -1) {
+      // Task not marked as updated or deleted, create new task in Google Tasks
+      var taskListName = row[0];
+      var taskListId = taskListMap[taskListName];
+      if (taskListId) {
+        var dueDate = row[2];
+        var dueTime = row[3];
+        var status = row[4];
+        var due = dueDate && dueTime ? new Date(dueDate + ' ' + dueTime) : null;
+        Tasks.Tasks.insert({ title: title, due: due, status: status }, taskListId);
+      }
+    }
+  });
+
+  // Delete tasks from Google Tasks for tasks marked as deleted
+  deletedTasks.forEach(function(title) {
+    var taskListId = taskListMap[taskListName]; // Define taskListId here
+    var task = findTaskByTitle(taskListId, title);
+    if (task) {
+      Tasks.Tasks.remove(taskListId, task.id);
+    }
+  });
+
+  // Clear the sheet and rewrite all tasks from Google Tasks
+  var syncedTasks = [];
+  taskLists.forEach(function(taskList) {
+    var taskListId = taskList.getId(); // Define taskListId here
+    var tasks = Tasks.Tasks.list(taskListId).getItems();
+    if (tasks && tasks.length > 0) {
+      tasks.forEach(function(task) {
+        var title = task.title || '';
+        var due = task.due ? new Date(task.due) : null;
+        var dueDate = due ? Utilities.formatDate(due, Session.getScriptTimeZone(), 'MM/dd/yyyy') : '';
+        var dueTime = due ? Utilities.formatDate(due, Session.getScriptTimeZone(), 'HH:mm:ss') : '';
+        var status = task.status || '';
+
+        syncedTasks.push([taskList.getTitle(), title, dueDate, dueTime, status]);
+      });
+    }
+  });
+
+  sheet.clear().getRange(1, 1, syncedTasks.length + 1, 5).setValues([['Task List', 'Title', 'Due Date', 'Due Time', 'Status']].concat(syncedTasks));
+
+  Logger.log('Tasks synchronized successfully.');
+}
+
+function findTaskByTitle(taskListId, title) {
+  var tasks = Tasks.Tasks.list(taskListId).getItems();
+  if (tasks && tasks.length > 0) {
+    return tasks.find(function(task) {
+      return task.title === title;
+    });
+  }
+  return null;
+}
